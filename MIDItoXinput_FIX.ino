@@ -12,6 +12,9 @@ static bool currentNoteOn[128] = {false};
 static int16_t xInputX = 0;
 static int16_t xInputY = 0;
 
+// 前回のポーリング時間を記録
+unsigned long lastPollTime = 0;
+
 void setup()
 {
   if (Usb.Init() == -1) {
@@ -23,8 +26,15 @@ void setup()
 
 void loop()
 {
-  Usb.Task();
-  MIDI_poll();
+  // 現在の時間を取得
+  unsigned long currentMicros = micros();
+
+  // 1000Hz (1ms) ごとにポーリング処理を実行
+  if (currentMicros - lastPollTime >= 1000) {
+    lastPollTime = currentMicros;
+    Usb.Task();
+    MIDI_poll();
+  }
 }
 
 void MIDI_poll()
@@ -132,3 +142,4 @@ void convertToXInput(char midiNote, bool noteOn)
       break;
   }
 }
+
