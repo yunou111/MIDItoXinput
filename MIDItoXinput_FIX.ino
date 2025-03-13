@@ -5,55 +5,64 @@
 USB Usb;
 USBH_MIDI Midi(&Usb);
 
-void MIDI_poll();
-void convertToXInput(char midiNote, bool noteOn);
-
 static bool currentNoteOn[128] = {false};
 static int16_t xInputX = 0;
 static int16_t xInputY = 0;
 
-// 前回のポーリング時間を記録
 unsigned long lastPollTime = 0;
 
-void setup()
-{
-  if (Usb.Init() == -1) {
-    while (1);  // 初期化失敗時は停止
+//ArduinoがUSBデバイスと安定して通信できる状態を確保し、XInputによる入力の準備を整える//
+void setup() {
+  Serial.begin(250000);  // 250000bpsでシリアル通信を開始
+  delay(200);
+
+  int retryCount = 0;
+  while (Usb.Init() != 0) {
+    Serial.print("USB initialization failed, retrying... Attempt: ");
+    Serial.println(retryCount + 1);
+    retryCount++;
+    if (retryCount > 5) {
+      Serial.println("Failed to initialize USB after multiple attempts. Check hardware.");
+      while (1);  // 5回リトライしても失敗したら停止
+    }
+    delay(1000);
   }
-  delay(10);
+  Serial.println("USB initialized successfully.");
+
   XInput.begin();
+  delay(10);
 }
 
-void loop()
-{
-  // 現在の時間を取得
+void loop() {
   unsigned long currentMicros = micros();
 
   // 1000Hz (1ms) ごとにポーリング処理を実行
-  if (currentMicros - lastPollTime >= 1000) {
+  if (currentMicros - lastPollTime >= 1) {  // 1msごとに
     lastPollTime = currentMicros;
+
+    // 非同期的にUSBとMIDIデータを処理
     Usb.Task();
     MIDI_poll();
   }
 }
 
-void MIDI_poll()
-{
+//MIDIキーボードのノート（鍵盤の音）を XInputのボタンとしてマッピングしつつ、左スティックの値を更新する関数//
+void MIDI_poll() {
   uint8_t outBuf[3];
-  uint8_t size;
+  uint8_t size = Midi.RecvData(outBuf);  // MIDIデータの受信サイズを取得
 
-  do {
-    if ((size = Midi.RecvData(outBuf)) > 0) {
-      switch (outBuf[0] & 0xf0) {
-        case 0x80:  // note off
-          convertToXInput(outBuf[1], false);
-          break;
-        case 0x90:  // note on
-          convertToXInput(outBuf[1], outBuf[2] != 0);
-          break;
-      }
+  // MIDIメッセージがある場合のみ処理
+  if (size > 0) {
+    // MIDIメッセージタイプの判定と処理
+    switch (outBuf[0] & 0xf0) {
+      case 0x80:  // note off
+        convertToXInput(outBuf[1], false);
+        break;
+      case 0x90:  // note on
+        convertToXInput(outBuf[1], outBuf[2] != 0);
+        break;
     }
-  } while (size > 0);
+  }
 
   // 左アナログスティックの値をXInputに送信
   XInputController& xinput = XInput;
@@ -61,8 +70,7 @@ void MIDI_poll()
   xinput.send();
 }
 
-void convertToXInput(char midiNote, bool noteOn)
-{
+void convertToXInput(char midiNote, bool noteOn) {
   // MIDIノートの状態を更新
   currentNoteOn[midiNote] = noteOn;
 
@@ -75,11 +83,11 @@ void convertToXInput(char midiNote, bool noteOn)
   if (currentNoteOn[52]) tempX += 32767;  // 右
 
   // 上下の計算
-  if (currentNoteOn[68]) tempY += 32767;  // 上
+  if (currentNoteOn[80]) tempY += 32767;  // 上
   if (currentNoteOn[50]) tempY -= 32767;  // 下
 
   // 下方向から左斜め上への特殊ロジック
-  if (currentNoteOn[50] && currentNoteOn[48] && currentNoteOn[68]) {
+  if (currentNoteOn[50] && currentNoteOn[48] && currentNoteOn[80]) {
     tempX = -32767;  // 左
     tempY = 32767;   // 上
   }
@@ -88,7 +96,7 @@ void convertToXInput(char midiNote, bool noteOn)
   xInputX = tempX;
   xInputY = tempY;
 
-  // その他のボタン処理
+  // その他のボタン処理(37鍵盤)
   XInputController& xinput = XInput;
 
   switch (midiNote) {
@@ -120,26 +128,42 @@ void convertToXInput(char midiNote, bool noteOn)
       if (noteOn) xinput.press(XInputControl::BUTTON_BACK);
       else xinput.release(XInputControl::BUTTON_BACK);
       break;
-    case 67:
+    case 79:
       if (noteOn) xinput.press(XInputControl::BUTTON_RB);
       else xinput.release(XInputControl::BUTTON_RB);
       break;
-    case 69:
+    case 81:
       if (noteOn) xinput.press(XInputControl::BUTTON_X);
       else xinput.release(XInputControl::BUTTON_X);
       break;
-    case 70:
+    case 82:
       if (noteOn) xinput.press(XInputControl::BUTTON_A);
       else xinput.release(XInputControl::BUTTON_A);
       break;
-    case 71:
+    case 83:
       if (noteOn) xinput.press(XInputControl::BUTTON_Y);
       else xinput.release(XInputControl::BUTTON_Y);
       break;
-    case 72:
+    case 84:
       if (noteOn) xinput.press(XInputControl::BUTTON_B);
       else xinput.release(XInputControl::BUTTON_B);
       break;
+  // Dパッド(競技用にするなら削除)
+    case 56:
+      if (noteOn) xinput.press(XInputControl::DPAD_LEFT);
+      else xinput.release(XInputControl::DPAD_LEFT);
+      break;
+    case 58:
+      if (noteOn) xinput.press(XInputControl::DPAD_RIGHT);
+      else xinput.release(XInputControl::DPAD_RIGHT);
+      break;
+    case 61:
+      if (noteOn) xinput.press(XInputControl::DPAD_DOWN);
+      else xinput.release(XInputControl::DPAD_DOWN);
+      break;
+    case 63:
+      if (noteOn) xinput.press(XInputControl::DPAD_UP);
+      else xinput.release(XInputControl::DPAD_UP);
+      break;
   }
 }
-
