@@ -22,7 +22,7 @@ const struct {
   XInputControl control;
 } buttonMappings[] = {
   {49, XInputControl::TRIGGER_RIGHT},
-  {53, XInputControl::BUTTON_LB},
+  {51, XInputControl::BUTTON_LB},
   {55, XInputControl::TRIGGER_LEFT},
   {57, XInputControl::BUTTON_L3},
   {59, XInputControl::BUTTON_R3},
@@ -107,12 +107,6 @@ void updateJoystickState() {
   // 上下の動き
   if (currentNoteOn[68]) tempY += 32767; // G5 (上)
   if (currentNoteOn[50]) tempY -= 32767; // D4 (下)
-
-  // 特殊な斜め入力のロジック
-  if (currentNoteOn[50] && currentNoteOn[48] && currentNoteOn[68]) {
-    tempX = -32767;
-    tempY = 32767;
-  }
 
   xinputState.joyX = tempX;
   xinputState.joyY = tempY;
